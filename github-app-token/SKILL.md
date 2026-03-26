@@ -19,18 +19,17 @@ The following environment variables MUST be set before invoking this skill:
 
 If any variable is missing, stop and tell the user which ones are required.
 
+Requires `openssl`, `curl`, and `grep` (standard on macOS and Linux).
+
 ## Steps
 
 ### 1. Generate a JWT
 
-Create a JWT signed with the GitHub App's private key. You MUST use the helper script bundled with this skill:
+Run the helper script bundled with this skill:
 
 ```bash
-# generates a JWT valid for 10 minutes
-TOKEN=$(python3 "$(dirname "$0")/../skills/github-app-token/scripts/generate_jwt.py")
+TOKEN=$(bash /path/to/skills/github-app-token/scripts/generate_jwt.sh)
 ```
-
-If `python3` is not available, fall back to the inline openssl method described in the Fallback section below.
 
 The JWT uses:
 - **Algorithm**: RS256
@@ -43,12 +42,13 @@ The JWT uses:
 ### 2. Exchange the JWT for an installation access token
 
 ```bash
-INSTALL_TOKEN=$(curl -s -X POST \
+RESPONSE=$(curl -s -X POST \
   -H "Authorization: Bearer ${TOKEN}" \
   -H "Accept: application/vnd.github+json" \
   -H "X-GitHub-Api-Version: 2022-11-28" \
-  "https://api.github.com/app/installations/${GITHUB_APP_INSTALLATION_ID}/access_tokens" \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])")
+  "https://api.github.com/app/installations/${GITHUB_APP_INSTALLATION_ID}/access_tokens")
+
+INSTALL_TOKEN=$(echo "$RESPONSE" | grep -o '"token":"[^"]*"' | head -1 | cut -d'"' -f4)
 ```
 
 If the response contains an error (e.g., `401 Unauthorized`), check:
@@ -80,23 +80,6 @@ curl -s -X DELETE \
   -H "Accept: application/vnd.github+json" \
   "https://api.github.com/installation/token"
 ```
-
-## Fallback: JWT generation without Python
-
-If `python3` is unavailable, generate the JWT using `openssl` and `bash`:
-
-```bash
-header=$(printf '{"alg":"RS256","typ":"JWT"}' | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
-now=$(date +%s)
-iat=$((now - 60))
-exp=$((now + 600))
-payload=$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' "$iat" "$exp" "$GITHUB_APP_ID" | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
-unsigned="${header}.${payload}"
-signature=$(printf '%s' "$unsigned" | openssl dgst -sha256 -sign "${GITHUB_APP_PEM_FILE}" -binary | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
-TOKEN="${unsigned}.${signature}"
-```
-
-Then continue from Step 2.
 
 ## Security Notes
 
