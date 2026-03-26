@@ -36,9 +36,9 @@ eval "$(/path/to/skills/github-app-token/scripts/generate_token.sh)"
 > `echo "GH_TOKEN=$(/path/to/skills/github-app-token/scripts/generate_token.sh | cut -d'"' -f2)" >> $GITHUB_ENV`
 
 The script will:
-1. Generate a short-lived JWT using your App ID and PEM key
-2. Exchange the JWT to get a GitHub Installation Access Token
-3. Output the `export GH_TOKEN=...` command to set it in your environment.
+1. Automatically construct a short-lived authorization assertion using your App ID and PEM key
+2. Call the GitHub API to securely exchange that for an Installation Access Token
+3. Output the `export GH_TOKEN="..."` command to set it in your environment.
 ### 2. Authenticate the gh CLI
 
 With `GH_TOKEN` set, the `gh` CLI operates securely and without needing a separate authentication login for most API operations. Note that `gh auth status` may not reflect the token since it checks local config, but `gh` will respect the `GH_TOKEN` environment variable!
@@ -71,6 +71,6 @@ curl -s -X DELETE \
 
 ## Security Notes
 
-- Never log or echo the PEM key, JWT, or installation token to stdout in production.
-- The JWT is valid for at most 10 minutes. The installation token is valid for 1 hour.
+- Never log or echo the PEM key or installation token to stdout in production.
+- The installation token represents your GitHub App and is strictly valid for 1 hour from generation.
 - Store the PEM file with restrictive permissions (`chmod 600`) and never check it into git.
