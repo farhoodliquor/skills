@@ -25,38 +25,34 @@ Requires `openssl`, `curl`, `grep`, and `jq` (standard on modern environments).
 
 ### 1. Generate and Export Token
 
-Run the helper script and `eval` its output. This securely exports the short-lived GitHub installation access token as `GH_TOKEN` into your current process environment:
+Run the helper script and `eval` its output. This securely exports the short-lived GitHub installation access token as `GH_TOKEN` into your current process environment.
+
+**Important:** Because `eval` sets the variable in the current shell process, any commands that need `GH_TOKEN` must run in the **same shell invocation**. Chain all dependent commands together:
 
 ```bash
-eval "$(/path/to/skills/github-app-token/scripts/generate_token.sh)"
+eval "$(/path/to/skills/github-app-token/scripts/generate_token.sh)" && gh api user
 ```
 
-> [!NOTE] 
-> Because this uses `eval`, the token is scoped only to the current terminal session, process, or script that executes it. For a CI/CD environment (like GitHub Actions), you can extract the token to pass it between steps like so:
+Do NOT run `eval` in one command and then use `GH_TOKEN` in a separate command — the variable will not persist between separate shell invocations.
+
+> [!NOTE]
+> For a CI/CD environment (like GitHub Actions), you can extract the token to pass it between steps like so:
 > `echo "GH_TOKEN=$(/path/to/skills/github-app-token/scripts/generate_token.sh | cut -d'"' -f2)" >> $GITHUB_ENV`
 
 The script will:
 1. Automatically construct a short-lived authorization assertion using your App ID and PEM key
 2. Call the GitHub API to securely exchange that for an Installation Access Token
 3. Output the `export GH_TOKEN="..."` command to set it in your environment.
+
 ### 2. Authenticate the gh CLI
 
-With `GH_TOKEN` set, the `gh` CLI operates securely and without needing a separate authentication login for most API operations. Note that `gh auth status` may not reflect the token since it checks local config, but `gh` will respect the `GH_TOKEN` environment variable!
+With `GH_TOKEN` set (in the same shell), the `gh` CLI operates securely and without needing a separate authentication login for most API operations. Note that `gh auth status` may not reflect the token since it checks local config, but `gh` will respect the `GH_TOKEN` environment variable.
+
+To both generate the token and authenticate `gh` in one go:
 
 ```bash
-# Check that gh is working
-gh api user
+eval "$(/path/to/skills/github-app-token/scripts/generate_token.sh)" && echo "${GH_TOKEN}" | gh auth login --with-token && gh auth status
 ```
-
-*(Alternatively, to specifically configure gh auth locally, you can use: `echo "${GH_TOKEN}" | gh auth login --with-token`)*
-
-Verify it worked:
-
-```bash
-gh auth status
-```
-
-You should see authentication via `token` for `github.com`.
 
 ### 4. Cleanup
 
