@@ -1,6 +1,6 @@
 ---
 name: github-app-token
-description: Generate a GitHub installation access token from a GitHub App PEM key, App ID, and Installation ID, then authenticate the gh CLI with it.
+description: Generate a GitHub installation access token from a GitHub App PEM key, App ID, and Installation ID, write it to a per-agent file, then authenticate the gh CLI with it.
 ---
 
 # GitHub App Token Skill
@@ -23,7 +23,7 @@ Requires `openssl`, `curl`, and `jq`.
 
 ## Generate a Token
 
-Build a JWT signed with the App's private key, then exchange it for an installation access token:
+Build a JWT signed with the App's private key, then exchange it for an installation access token and write it to a file:
 
 ```bash
 # Base64url helper
@@ -37,40 +37,47 @@ SIGNED=$(printf '%s' "$HEADER" | b64enc).$(printf '%s' "$PAYLOAD" | b64enc)
 SIG=$(printf '%s' "$SIGNED" | openssl dgst -binary -sha256 -sign "$GITHUB_APP_PEM_FILE" | b64enc)
 JWT="${SIGNED}.${SIG}"
 
-# Exchange JWT for installation token
-GH_TOKEN=$(curl -s -X POST \
+# Token file — unique per agent to avoid env-var collisions
+GH_TOKEN_FILE="${AGENT_HOME:+${AGENT_HOME}/.gh-token}"
+GH_TOKEN_FILE="${GH_TOKEN_FILE:-$(mktemp)}"
+
+# Exchange JWT for installation token and write to file
+curl -s -X POST \
   -H "Authorization: Bearer ${JWT}" \
   -H "Accept: application/vnd.github+json" \
   -H "X-GitHub-Api-Version: 2022-11-28" \
   "https://api.github.com/app/installations/${GITHUB_APP_INSTALLATION_ID}/access_tokens" \
-  | jq -r '.token')
+  | jq -r '.token' > "$GH_TOKEN_FILE"
 
-export GH_TOKEN
+chmod 600 "$GH_TOKEN_FILE"
 ```
+
+The token file path defaults to `$AGENT_HOME/.gh-token` (unique per agent) or a temporary file when `AGENT_HOME` is not set. This avoids env-var collisions when multiple agents generate tokens concurrently.
 
 ## Authenticate the gh CLI
 
-With `GH_TOKEN` exported, the `gh` CLI uses it automatically for API operations:
+Read the token from the file and log in:
 
 ```bash
-gh api user
+gh auth login --with-token < "$GH_TOKEN_FILE"
 ```
 
-To persist into `gh auth` config:
+To use `GH_TOKEN` in a single command without polluting the environment:
 
 ```bash
-echo "${GH_TOKEN}" | gh auth login --with-token
+GH_TOKEN=$(cat "$GH_TOKEN_FILE") gh api user
 ```
 
 ## Cleanup
 
-The installation access token expires after 1 hour. To revoke it early:
+The installation access token expires after 1 hour. To revoke it early and remove the token file:
 
 ```bash
 curl -s -X DELETE \
-  -H "Authorization: Bearer ${GH_TOKEN}" \
+  -H "Authorization: Bearer $(cat "$GH_TOKEN_FILE")" \
   -H "Accept: application/vnd.github+json" \
   "https://api.github.com/installation/token"
+rm -f "$GH_TOKEN_FILE"
 ```
 
 ## Security Notes
@@ -78,3 +85,4 @@ curl -s -X DELETE \
 - Never log or echo the PEM key or installation token to stdout in production.
 - The installation token is valid for 1 hour from generation.
 - Store the PEM file with restrictive permissions (`chmod 600`) and never check it into git.
+- The token file is written with mode `600` and should be cleaned up after use.
