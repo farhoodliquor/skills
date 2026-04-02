@@ -16,10 +16,11 @@ Each skill follows this convention:
 
 - **`github-app-token`** — Documents how to generate short-lived GitHub App installation access tokens. Requires `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, and `GITHUB_APP_PEM_FILE` env vars. Inline commands only — no bundled scripts.
 - **`playwright-ephemeral`** — Provisions ephemeral Playwright MCP browser sessions as Kubernetes Jobs for E2E testing. Creates a Job + Service pair in a dedicated namespace, waits for readiness, and returns the MCP endpoint URL. Requires `kubectl` and appropriate RBAC.
+- **`shannon`** — Autonomous AI pentester for web apps and APIs. Wraps the Docker-based Shannon pentester as a `/shannon` slash command. Requires `docker`, `git`, and an AI API key (`ANTHROPIC_API_KEY` or equivalent).
 
 ## Key Patterns
 
-- Scripts are pure bash with no external dependencies beyond standard Unix tools (`openssl`, `curl`, `jq`, `kubectl`).
+- Scripts are pure bash with no external dependencies beyond standard Unix tools (`openssl`, `curl`, `jq`, `kubectl`, `docker`).
 - The `die()` function prints errors to stderr and exits non-zero.
 
 ## No Build/Test/Lint System
