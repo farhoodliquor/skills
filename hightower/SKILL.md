@@ -7,7 +7,15 @@ allowed-tools: Bash, Read
 
 # Hightower: Penetration Testing API
 
-Hightower is deployed in the `hightower` namespace on Kubernetes. It exposes a REST API for scan management and a Temporal cluster for workflow orchestration.
+Hightower is an AI-powered penetration testing platform forked from [KeygraphHQ/shannon](https://github.com/KeygraphHQ/shannon). It runs multi-agent security assessments against a target URL and git repository, coordinating up to 13 specialized AI agents (recon, auth testing, injection, etc.) to produce a structured findings report.
+
+**Architecture:**
+- **`hightower-api`** — Hono REST API. Accepts scan requests, creates Kubernetes Jobs for each scan, queries Temporal for job progress, and serves reports from the workspace PVC.
+- **Worker** — Shannon fork running inside K8s Jobs. Each scan gets its own Job; the worker executes the full AI agent pipeline against the target.
+- **Temporal** — Workflow orchestration engine. Tracks scan state, retries, and completion.
+- **Workspace PVC** — Persistent volume where completed scan reports are stored and served by the API.
+
+Scans are triggered via REST API and run asynchronously. Typical scan duration is ~36 minutes for the full 13-agent pipeline.
 
 ## Configuration
 
@@ -15,7 +23,7 @@ All settings come from environment variables:
 
 | Variable | Description |
 |----------|-------------|
-| `HIGHTOWER_API_URL` | Hightower REST API base URL (e.g., `http://hightower-api.hightower:3000`) |
+| `HIGHTOWER_API_URL` | Hightower REST API base URL (e.g., `http://hightower-api:3000`) |
 | `HIGHTOWER_API_TOKEN` | Bearer auth token for the Hightower API |
 
 ---
@@ -110,8 +118,6 @@ grep -A 10 "^### \[HIGH\]" report.md
 1. **running** — Job is active, worker processing
 2. **completed** — Job succeeded, report available at `{workspace}/report`
 3. **failed** — Job failed (check pod logs)
-
-Typical runtime: ~36 minutes for a full 13-agent pipeline.
 
 ---
 
